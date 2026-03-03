@@ -1,0 +1,4 @@
+runpod
+ultralytics
+Pillow
+requests
