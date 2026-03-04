@@ -9,6 +9,18 @@ from PIL import Image
 import traceback
 import time
 
+# Verificar numpy ANTES de continuar
+try:
+    import numpy as np
+    print(f"✅ NumPy version: {np.__version__}")
+except ImportError as e:
+    print(f"❌ NumPy NO está instalado: {e}")
+    print("📥 Intentando instalar numpy...")
+    import subprocess
+    subprocess.check_call(['pip', 'install', 'numpy>=1.24.0'])
+    import numpy as np
+    print("✅ NumPy instalado correctamente")
+
 print("="*50)
 print("🚀 INICIANDO HANDLER DE YOLO-WORLD")
 print("="*50)
@@ -30,6 +42,7 @@ try:
     print("✅ Modelo cargado exitosamente")
 except Exception as e:
     print(f"❌ Error cargando modelo: {e}")
+    traceback.print_exc()
     raise e
 
 def download_image(image_source):
@@ -63,34 +76,40 @@ def handler(job):
             return {"error": "No se proporcionó ninguna imagen"}
         
         # Obtener la imagen
+        print("📥 Descargando imagen...")
         image = download_image(job_input["image"])
         temp_path = f"/tmp/temp_image_{job_id}.jpg"
         image.save(temp_path, 'JPEG', quality=95)
+        print(f"💾 Imagen guardada: {image.size}")
         
         # Obtener clases
         custom_classes = job_input.get("classes", ["person"])
         if isinstance(custom_classes, str):
             custom_classes = [custom_classes]
+        print(f"🏷️ Clases: {custom_classes}")
         
-        # CORRECCIÓN: Usar la variable global model correctamente
+        # Configurar modelo
         global model
         try:
             model.set_classes(custom_classes)
-        except:
-            # Si falla, recargar modelo
+            print("✅ Clases configuradas")
+        except Exception as e:
+            print(f"⚠️ Error configurando clases: {e}")
+            # Recargar modelo si falla
             model = YOLOWorld("yolov8x-worldv2.pt")
             model.set_classes(custom_classes)
-        
-        # Configurar dispositivo
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        if device == 'cuda':
-            model.model.to('cuda')
+            if torch.cuda.is_available():
+                model.model.to('cuda')
+            print("✅ Modelo recargado")
         
         # Parámetros
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         confidence = float(job_input.get("confidence", 0.25))
         imgsz = int(job_input.get("imgsz", 640))
+        print(f"⚙️ Parámetros: conf={confidence}, imgsz={imgsz}, device={device}")
         
         # Inferencia
+        print("🔍 Ejecutando inferencia...")
         results = model.predict(
             source=temp_path,
             imgsz=imgsz,
@@ -117,11 +136,14 @@ def handler(job):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         
+        elapsed_time = round(time.time() - start_time, 2)
+        print(f"✅ Completado: {len(predictions)} detecciones en {elapsed_time}s")
+        
         return {
             "predictions": predictions,
             "classes_used": custom_classes,
             "count": len(predictions),
-            "processing_time": round(time.time() - start_time, 2)
+            "processing_time": elapsed_time
         }
         
     except Exception as e:
