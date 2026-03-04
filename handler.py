@@ -97,12 +97,13 @@ def handler(job):
         try:
             model.set_classes(custom_classes)
             print("✅ Clases configuradas")
-        except Exception as e:
-            print(f"⚠️ Error configurando clases: {e}")
-            # Intentar recargar modelo si falla
-            global model
-            model = YOLOWorld("yolov8x-worldv2.pt")
-            model.set_classes(custom_classes)
+except Exception as e:
+    print(f"⚠️ Error configurando clases: {e}")
+    # CORRECCIÓN: Declarar global al principio del bloque
+    global model
+    # Intentar recargar modelo si falla
+    model = YOLOWorld("yolov8x-worldv2.pt")
+    model.set_classes(custom_classes)
         
         # Asegurar que el modelo está en el dispositivo correcto
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -169,5 +170,6 @@ print("\n" + "="*50)
 print("✅ Handler configurado correctamente")
 print("🚀 Iniciando servidor RunPod...")
 print("="*50 + "\n")
+
 
 runpod.serverless.start({"handler": handler})
