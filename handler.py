@@ -1,49 +1,65 @@
 import runpod
-from ultralytics import YOLOWorld
 import torch
 import os
 import requests
 import base64
-from io import BytesIO
-from PIL import Image
 import traceback
 import time
+import sys
+from io import BytesIO
+from PIL import Image
 
-# Verificar numpy ANTES de continuar
+print("="*60)
+print("🚀 INICIANDO HANDLER DE YOLO-WORLD v2")
+print("="*60)
+
+# VERIFICACIÓN CRÍTICA DE NUMPY
+print("\n🔍 VERIFICANDO DEPENDENCIAS:")
 try:
     import numpy as np
-    print(f"✅ NumPy version: {np.__version__}")
+    print(f"  ✅ NumPy: {np.__version__} - OK")
+    print(f"  📍 Ruta: {np.__file__}")
 except ImportError as e:
-    print(f"❌ NumPy NO está instalado: {e}")
-    print("📥 Intentando instalar numpy...")
+    print(f"  ❌ NumPy NO disponible: {e}")
+    print("  📥 Instalando numpy automáticamente...")
     import subprocess
-    subprocess.check_call(['pip', 'install', 'numpy>=1.24.0'])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'numpy==1.24.3'])
     import numpy as np
-    print("✅ NumPy instalado correctamente")
-
-print("="*50)
-print("🚀 INICIANDO HANDLER DE YOLO-WORLD")
-print("="*50)
+    print(f"  ✅ NumPy instalado: {np.__version__}")
 
 # Verificar CUDA
-print(f"CUDA disponible: {torch.cuda.is_available()}")
+print("\n🔍 VERIFICANDO CUDA:")
+print(f"  CUDA disponible: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
-    print(f"Memoria GPU: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    print(f"  GPU: {torch.cuda.get_device_name(0)}")
+    print(f"  Memoria GPU: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
-# Cargar el modelo al inicio
+# Ahora importar ultralytics DESPUÉS de verificar numpy
+print("\n🔍 CARGANDO YOLO-WORLD:")
+try:
+    from ultralytics import YOLOWorld
+    print("  ✅ Ultralytics importado correctamente")
+except Exception as e:
+    print(f"  ❌ Error importando ultralytics: {e}")
+    raise e
+
+# Cargar el modelo
 model = None
 try:
-    print("📥 Cargando modelo YOLO-World...")
+    print("  📥 Descargando modelo yolov8x-worldv2.pt...")
     model = YOLOWorld("yolov8x-worldv2.pt")
     if torch.cuda.is_available():
         model.model.to('cuda')
-        print("✅ Modelo movido a GPU")
-    print("✅ Modelo cargado exitosamente")
+        print("  ✅ Modelo movido a GPU")
+    print("  ✅ Modelo cargado exitosamente")
 except Exception as e:
-    print(f"❌ Error cargando modelo: {e}")
+    print(f"  ❌ Error cargando modelo: {e}")
     traceback.print_exc()
     raise e
+
+print("\n" + "="*60)
+print("✅ HANDLER LISTO PARA RECIBIR PETICIONES")
+print("="*60 + "\n")
 
 def download_image(image_source):
     """Descarga imagen desde URL o decodifica base64"""
@@ -67,6 +83,7 @@ def handler(job):
     start_time = time.time()
     
     print(f"\n🔨 Procesando job: {job_id}")
+    print("-" * 40)
     
     try:
         job_input = job["input"]
@@ -75,38 +92,52 @@ def handler(job):
         if not job_input.get("image"):
             return {"error": "No se proporcionó ninguna imagen"}
         
+        # Verificar numpy NUEVAMENTE en cada request (por si acaso)
+        try:
+            import numpy as np
+        except ImportError:
+            print("⚠️ NumPy no disponible en request, reinstalando...")
+            import subprocess
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'numpy==1.24.3'])
+            import numpy as np
+        
         # Obtener la imagen
         print("📥 Descargando imagen...")
         image = download_image(job_input["image"])
         temp_path = f"/tmp/temp_image_{job_id}.jpg"
         image.save(temp_path, 'JPEG', quality=95)
-        print(f"💾 Imagen guardada: {image.size}")
+        print(f"  - Dimensiones: {image.size}")
+        print(f"  - Modo: {image.mode}")
         
         # Obtener clases
         custom_classes = job_input.get("classes", ["person"])
         if isinstance(custom_classes, str):
             custom_classes = [custom_classes]
-        print(f"🏷️ Clases: {custom_classes}")
+        print(f"🏷️ Clases a detectar ({len(custom_classes)}): {custom_classes[:5]}...")
         
         # Configurar modelo
         global model
         try:
             model.set_classes(custom_classes)
-            print("✅ Clases configuradas")
+            print("  ✅ Clases configuradas")
         except Exception as e:
-            print(f"⚠️ Error configurando clases: {e}")
+            print(f"  ⚠️ Error configurando clases: {e}")
             # Recargar modelo si falla
+            from ultralytics import YOLOWorld
             model = YOLOWorld("yolov8x-worldv2.pt")
             model.set_classes(custom_classes)
             if torch.cuda.is_available():
                 model.model.to('cuda')
-            print("✅ Modelo recargado")
+            print("  ✅ Modelo recargado")
         
         # Parámetros
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         confidence = float(job_input.get("confidence", 0.25))
         imgsz = int(job_input.get("imgsz", 640))
-        print(f"⚙️ Parámetros: conf={confidence}, imgsz={imgsz}, device={device}")
+        print(f"⚙️ Parámetros:")
+        print(f"  - confianza: {confidence}")
+        print(f"  - imgsz: {imgsz}")
+        print(f"  - device: {device}")
         
         # Inferencia
         print("🔍 Ejecutando inferencia...")
@@ -149,8 +180,12 @@ def handler(job):
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         traceback.print_exc()
-        return {"error": str(e)}
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
 
 # Iniciar servidor
-print("✅ Handler configurado, iniciando servidor...")
-runpod.serverless.start({"handler": handler})
+if __name__ == "__main__":
+    runpod.serverless.start({"handler": handler})
