@@ -13,17 +13,15 @@ print("="*60)
 print("🚀 INICIANDO HANDLER DE YOLO-WORLD v2")
 print("="*60)
 
-# VERIFICACIÓN CRÍTICA DE NUMPY
+# VERIFICACIÓN DE NUMPY
 print("\n🔍 VERIFICANDO DEPENDENCIAS:")
 try:
     import numpy as np
-    print(f"  ✅ NumPy: {np.__version__} - OK")
-    print(f"  📍 Ruta: {np.__file__}")
+    print(f"  ✅ NumPy: {np.__version__}")
 except ImportError as e:
     print(f"  ❌ NumPy NO disponible: {e}")
-    print("  📥 Instalando numpy automáticamente...")
     import subprocess
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'numpy==1.24.3'])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'numpy>=1.24.0'])
     import numpy as np
     print(f"  ✅ NumPy instalado: {np.__version__}")
 
@@ -34,22 +32,32 @@ if torch.cuda.is_available():
     print(f"  GPU: {torch.cuda.get_device_name(0)}")
     print(f"  Memoria GPU: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
-# Ahora importar ultralytics DESPUÉS de verificar numpy
+# IMPORTAR CORRECTAMENTE - USANDO YOLO EN LUGAR DE YOLOWorld
 print("\n🔍 CARGANDO YOLO-WORLD:")
 try:
-    from ultralytics import YOLOWorld
-    print("  ✅ Ultralytics importado correctamente")
+    # CORRECCIÓN: Importar YOLO en lugar de YOLOWorld
+    from ultralytics import YOLO
+    print("  ✅ Ultralytics YOLO importado correctamente")
 except Exception as e:
     print(f"  ❌ Error importando ultralytics: {e}")
+    traceback.print_exc()
     raise e
 
-# Cargar el modelo
+# Cargar el modelo - usar YOLO con modelo world
 model = None
 try:
     print("  📥 Descargando modelo yolov8x-worldv2.pt...")
-    model = YOLOWorld("yolov8x-worldv2.pt")
+    # CORRECCIÓN: Usar YOLO con modelo world
+    model = YOLO("yolov8x-worldv2.pt")
+    
+    # Verificar que es un modelo world
+    if hasattr(model, 'set_classes'):
+        print("  ✅ Modelo YOLO-World detectado correctamente")
+    else:
+        print("  ⚠️ El modelo cargado no soporta set_classes")
+    
     if torch.cuda.is_available():
-        model.model.to('cuda')
+        model.to('cuda')
         print("  ✅ Modelo movido a GPU")
     print("  ✅ Modelo cargado exitosamente")
 except Exception as e:
@@ -92,52 +100,35 @@ def handler(job):
         if not job_input.get("image"):
             return {"error": "No se proporcionó ninguna imagen"}
         
-        # Verificar numpy NUEVAMENTE en cada request (por si acaso)
-        try:
-            import numpy as np
-        except ImportError:
-            print("⚠️ NumPy no disponible en request, reinstalando...")
-            import subprocess
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'numpy==1.24.3'])
-            import numpy as np
-        
         # Obtener la imagen
         print("📥 Descargando imagen...")
         image = download_image(job_input["image"])
         temp_path = f"/tmp/temp_image_{job_id}.jpg"
         image.save(temp_path, 'JPEG', quality=95)
         print(f"  - Dimensiones: {image.size}")
-        print(f"  - Modo: {image.mode}")
         
         # Obtener clases
         custom_classes = job_input.get("classes", ["person"])
         if isinstance(custom_classes, str):
             custom_classes = [custom_classes]
-        print(f"🏷️ Clases a detectar ({len(custom_classes)}): {custom_classes[:5]}...")
+        print(f"🏷️ Clases a detectar ({len(custom_classes)}): {custom_classes}")
         
-        # Configurar modelo
+        # CORRECCIÓN: Configurar modelo con set_classes
         global model
         try:
-            model.set_classes(custom_classes)
-            print("  ✅ Clases configuradas")
+            if hasattr(model, 'set_classes'):
+                model.set_classes(custom_classes)
+                print("  ✅ Clases configuradas")
+            else:
+                print("  ⚠️ El modelo no soporta set_classes, continuando con clases por defecto")
         except Exception as e:
             print(f"  ⚠️ Error configurando clases: {e}")
-            # Recargar modelo si falla
-            from ultralytics import YOLOWorld
-            model = YOLOWorld("yolov8x-worldv2.pt")
-            model.set_classes(custom_classes)
-            if torch.cuda.is_available():
-                model.model.to('cuda')
-            print("  ✅ Modelo recargado")
         
         # Parámetros
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         confidence = float(job_input.get("confidence", 0.25))
         imgsz = int(job_input.get("imgsz", 640))
-        print(f"⚙️ Parámetros:")
-        print(f"  - confianza: {confidence}")
-        print(f"  - imgsz: {imgsz}")
-        print(f"  - device: {device}")
+        print(f"⚙️ Parámetros: conf={confidence}, imgsz={imgsz}, device={device}")
         
         # Inferencia
         print("🔍 Ejecutando inferencia...")
@@ -155,13 +146,13 @@ def handler(job):
             if r.boxes is not None:
                 boxes = r.boxes.cpu()
                 for box in boxes:
-                    class_idx = int(box.cls.item())
-                    if class_idx < len(custom_classes):
-                        predictions.append({
-                            "class": custom_classes[class_idx],
-                            "confidence": round(float(box.conf.item()), 4),
-                            "bbox": [round(x, 2) for x in box.xyxy[0].tolist()]
-                        })
+                    class_id = int(box.cls.item())
+                    class_name = r.names[class_id] if class_id in r.names else f"class_{class_id}"
+                    predictions.append({
+                        "class": class_name,
+                        "confidence": round(float(box.conf.item()), 4),
+                        "bbox": [round(x, 2) for x in box.xyxy[0].tolist()]
+                    })
         
         # Limpiar
         if os.path.exists(temp_path):
@@ -180,11 +171,7 @@ def handler(job):
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         traceback.print_exc()
-        return {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }
+        return {"error": str(e)}
 
 # Iniciar servidor
 if __name__ == "__main__":
