@@ -46,8 +46,8 @@ except Exception as e:
 # Cargar el modelo - usar YOLO con modelo world
 model = None
 try:
-    print("  📥 Descargando modelo yolov8x-worldv2.pt...")
-    # CORRECCIÓN: Usar YOLO con modelo world
+    print("  📥 Iniciando carga de yolov8x-worldv2.pt...")
+    # Esto forzará a Ultralytics a buscar en Internet si no está en /workspace/ia/
     model = YOLO("yolov8x-worldv2.pt")
     
     # Verificar que es un modelo world
@@ -176,3 +176,4 @@ def handler(job):
 # Iniciar servidor
 if __name__ == "__main__":
     runpod.serverless.start({"handler": handler})
+
