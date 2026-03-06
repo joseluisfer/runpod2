@@ -34,7 +34,7 @@ model = YOLO("yolov8x-worldv2.pt")
 
 model.to("cuda:0")
 model.fuse()
-model.model.half()  # FP16
+
 
 print("✅ Modelo cargado en GPU con FP16")
 
@@ -143,4 +143,5 @@ def handler(job):
 
 if __name__ == "__main__":
     runpod.serverless.start({"handler": handler})
+
 
