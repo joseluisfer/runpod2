@@ -11,13 +11,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Instalamos las librerías
-RUN pip install --no-cache-dir runpod ultralytics requests pillow
+# 🔥 ACTUALIZADO: Añadimos numpy explícitamente
+RUN pip install --no-cache-dir numpy runpod ultralytics requests pillow
 
-# 🔥 ESTA ES LA LÍNEA MÁGICA: Descarga el modelo World v2-X automáticamente
+# Descarga del modelo
 RUN python3 -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
 
 COPY handler.py /app/
-
 
 CMD ["python", "-u", "/app/handler.py"]
