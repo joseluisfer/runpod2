@@ -25,3 +25,4 @@ RUN python3 -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
 COPY handler.py .
 
 CMD ["python3", "-u", "handler.py"]
+
