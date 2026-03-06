@@ -78,6 +78,7 @@ def download_image(image_source):
 # ==========================================================
 
 def handler(job):
+    global model  # <--- ESTO DEBE IR PRIMERO
     start_time = time.time()
 
     job_input = job["input"]
@@ -142,3 +143,4 @@ def handler(job):
 
 if __name__ == "__main__":
     runpod.serverless.start({"handler": handler})
+
