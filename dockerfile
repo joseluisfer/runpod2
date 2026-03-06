@@ -1,29 +1,34 @@
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
-WORKDIR /app
 
+# Dependencias del sistema
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0 \
+    libgomp1 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu121
+WORKDIR /app
 
+# Dependencias Python
 RUN pip install --no-cache-dir \
+    numpy \
     runpod \
     ultralytics \
+    requests \
     pillow \
-    requests
+    git+https://github.com/openai/CLIP.git
 
-# descargar modelo en build
+# Descargar el modelo durante el build (reduce cold start)
 RUN python3 -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
 
-COPY handler.py .
+# Copiar handler
+COPY handler.py /app/
 
-CMD ["python3", "-u", "handler.py"]
+# Ejecutar worker serverless
+CMD ["python", "-u", "/app/handler.py"]
+
 
 
