@@ -1,43 +1,39 @@
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+# ===============================================
+# Dockerfile para YOLOv8x-WORLD en Runpod
+# ===============================================
+
+FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
-WORKDIR /app
 
-
-# instalar python y dependencias sistema
+# Instalación de dependencias del sistema
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    git \
-    libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0 \
+    libgomp1 \
+    git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# actualizar pip
-RUN pip3 install --upgrade pip
+WORKDIR /app
 
-# instalar pytorch GPU
-RUN pip3 install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu121
-
-# numpy compatible
-RUN pip3 install --no-cache-dir numpy==1.26.4
-
-# dependencias inference
-RUN pip3 install --no-cache-dir \
+# Instalación de dependencias Python
+RUN pip install --no-cache-dir \
+    numpy>=1.24 \
     runpod \
-    ultralytics \
+    ultralytics>=8.1.0 \
     pillow \
     requests \
-    opencv-python-headless \
-    git+https://github.com/openai/CLIP.git
+    ftfy \
+    regex \
+    tqdm \
+    clip
 
-# descargar modelo durante build (reduce cold start)
-RUN python3 -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
-
-# copiar handler
+# Copiar handler
 COPY handler.py /app/
 
-# start worker
-CMD ["python3", "-u", "handler.py"]
+# Pre-descarga del modelo (warm start)
+RUN python3 -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
 
+# Puerto por defecto y comando
+CMD ["python", "-u", "/app/handler.py"]
