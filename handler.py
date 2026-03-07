@@ -11,8 +11,16 @@ model = YOLO("yolov8x-worldv2.pt").to("cuda")
 print("Model ready")
 
 def load_image(url):
-    r = requests.get(url)
-    return Image.open(BytesIO(r.content)).convert("RGB")
+
+        # caso 1: URL
+    if image_input.startswith("http"):
+        response = requests.get(image_input)
+        return Image.open(BytesIO(response.content)).convert("RGB")
+
+    # caso 2: base64
+    else:
+        img_bytes = base64.b64decode(image_input)
+        return Image.open(BytesIO(img_bytes)).convert("RGB")
 
 def handler(job):
 
@@ -39,3 +47,4 @@ def handler(job):
     return {"detections": detections}
 
 runpod.serverless.start({"handler": handler})
+
