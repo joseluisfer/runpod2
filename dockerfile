@@ -1,39 +1,52 @@
-# ===============================================
-# Dockerfile para YOLOv8x-WORLD en Runpod
-# ===============================================
-
+# -------------------------------------------------
+# Base PyTorch + CUDA
+# -------------------------------------------------
 FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Instalación de dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libgomp1 \
-    git \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# Instalación de dependencias Python
-RUN pip install --no-cache-dir \
-    numpy>=1.24 \
+# -------------------------------------------------
+# Dependencias del sistema
+# -------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    git \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# -------------------------------------------------
+# Instalar dependencias Python
+# -------------------------------------------------
+RUN pip install --upgrade pip
+
+RUN pip install \
     runpod \
-    ultralytics>=8.1.0 \
+    ultralytics \
     pillow \
     requests \
     ftfy \
     regex \
-    tqdm \
-    clip
+    tqdm
 
+# CLIP necesario para YOLO World
+RUN pip install git+https://github.com/openai/CLIP.git
+
+# FORZAR instalación de numpy al final
+RUN pip install --force-reinstall numpy==1.26.4
+
+# -------------------------------------------------
+# Descargar modelo durante build
+# -------------------------------------------------
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
+
+# -------------------------------------------------
 # Copiar handler
-COPY handler.py /app/
+# -------------------------------------------------
+COPY handler.py .
 
-# Pre-descarga del modelo (warm start)
-RUN python3 -c "from ultralytics import YOLO; YOLO('yolov8x-worldv2.pt')"
-
-# Puerto por defecto y comando
-CMD ["python", "-u", "/app/handler.py"]
+# -------------------------------------------------
+# Start
+# -------------------------------------------------
+CMD ["python","-u","handler.py"]
