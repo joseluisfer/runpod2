@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
+
 # instalar python y dependencias sistema
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -39,3 +40,4 @@ COPY handler.py /app/
 
 # start worker
 CMD ["python3", "-u", "handler.py"]
+
